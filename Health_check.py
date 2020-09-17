@@ -10,7 +10,7 @@ directory_name = 'E-MW 자동 통합 점검 DB'  # 디렉토리명
 
 def get_node_info():
     # SOEM 서버에서 export한 csv 파일 활용 필요 컬럼 추출
-    node_table = pd.read_csv('node_info.csv', delimiter=';')
+    node_table = pd.read_csv(os.path.join(desktop_path, 'node_info.csv'), delimiter=';')
     necessary_columns = ['NE Name', 'IPv4', 'NE Type', 'NE ID', 'Sub-network']  # 필요 컬럼 내역
     node_table = node_table[necessary_columns]
     return node_table
