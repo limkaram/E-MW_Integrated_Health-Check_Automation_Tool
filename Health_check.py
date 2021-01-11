@@ -69,45 +69,108 @@ def get_operating_slots_and_npu_temperature(node_ip, node_type):
 
 
 def get_level_info(text):
-    # text : 하나의 노드의 전체 Slot level 텍스트 정보
+    # text : sh rl [slot] near-end 디스플레이 결과 텍스트
 
     text_line_list = text.split('\r\n')
     text_line_list = [i.strip() for i in text_line_list if ('Slot' in i) or ('Current' in i) or ('Tx Capacity - Modulation' in i)]
-    #['Slot 2 NEAR END - MMU3 A, RAU2 X 11/A07',
-    # 'Current Output Power       1) Stand By,
-    # 2) 21 dBm', 'Current Input Power       1) -43 dBm, 2) -39 dBm',
-    # Tx Capacity - Modulation   154 Mbit/s - 128QAM]
 
     need_value_by_slot = []  # [slot, Tx(주), Tx(예비), Rx(주), Rx(예비), QAM] 형태
 
-    for index, line in enumerate(text_line_list):
-        if 'Slot' in line:
-            need_value_by_slot.append(line[:7].replace('Slot', '').strip())
-        elif 'Current Output Power' in line:
-            need_value_by_slot += line.replace('Current Output Power', '')\
-                .replace('1)', '').replace('2)', '').replace('dBm', '').strip().split(',')
-        elif 'Current Input Power' in line:
-            need_value_by_slot += line.replace('Current Input Power', '')\
-                .replace('1)', '').replace('2)', '').replace('dBm', '').strip().split(',')
-        elif 'Tx Capacity - Modulation' in line:
-            need_value_by_slot.append(line.split('-')[-1].strip().rstrip('QAM'))
+    if len(text_line_list) == 4:  # QAM 추출 지원 경우
+        if any(['2)' not in line for line in text_line_list if line.startswith('Current')]):  # 1+0 운용 경우 혹은 레벨이 정상 추출 되지 않는 경우
+            for index, line in enumerate(text_line_list):
+                if 'Slot' in line:  # Slot 번호 추출
+                    slot_info = re.search(r'[S][l][o][t][ ]([0-9-]{1,2})', line)
+                    slot_num = slot_info.group(1)
+                    need_value_by_slot.append(slot_num)
+                elif 'Current Output Power' in line:  # Tx 주/예비 무선 레벨 추출
+                    level_info = re.search(r'[P][o][w][e][r][ ]{1,}(.{1,})', line)
+                    main_level = level_info.group(1).replace('dBm', '').replace(',', '').replace('1)', '').strip()
+                    need_value_by_slot.append(main_level)
+                    need_value_by_slot.append('수집불가')
+                elif 'Current Input Power' in line:  # Rx 주/예비 무선 레벨 추출
+                    level_info = re.search(r'[P][o][w][e][r][ ]{1,}(.{1,})', line)
+                    main_level = level_info.group(1).replace('dBm', '').replace(',', '').replace('1)', '').strip()
+                    need_value_by_slot.append(main_level)
+                    need_value_by_slot.append('수집불가')
+                elif 'Tx Capacity - Modulation' in line:  # QAM 값 추출
+                    qam_info = re.search(r'([0-9-]{1,3})[ ]{0,1}[Q][A][M]', line)
+                    qam = qam_info.group(1)
+                    need_value_by_slot.append(qam)
+        else:  # 정상의 경우(1+1 운용)
+            for index, line in enumerate(text_line_list):
+                if 'Slot' in line:  # Slot 번호 추출
+                    slot_info = re.search(r'[S][l][o][t][ ]([0-9-]{1,2})', line)
+                    slot_num = slot_info.group(1)
+                    need_value_by_slot.append(slot_num)
+                elif 'Current Output Power' in line:  # Tx 주/예비 무선 레벨 추출
+                    level_info = re.search(r'[1][)][ ](.{1,})[,]{0,1}[ ]{0,1}[2][)][ ](.{1,})', line)
+                    main_level = level_info.group(1).replace('dBm', '').replace(',', '').strip()
+                    backup_level = level_info.group(2).replace('dBm', '').replace(',', '').strip()
+                    need_value_by_slot.append(main_level)
+                    need_value_by_slot.append(backup_level)
+                elif 'Current Input Power' in line:  # Rx 주/예비 무선 레벨 추출
+                    level_info = re.search(r'[1][)][ ](.{1,})[,]{0,1}[ ]{0,1}[2][)][ ](.{1,})', line)
+                    main_level = level_info.group(1).replace('dBm', '').replace(',', '').strip()
+                    backup_level = level_info.group(2).replace('dBm', '').replace(',', '').strip()
+                    need_value_by_slot.append(main_level)
+                    need_value_by_slot.append(backup_level)
+                elif 'Tx Capacity - Modulation' in line:  # QAM 값 추출
+                    qam_info = re.search(r'([0-9-]{1,3})[ ]{0,1}[Q][A][M]', line)
+                    qam = qam_info.group(1)
+                    need_value_by_slot.append(qam)
+    elif len(text_line_list) == 3:  # QAM 추출 미지원 경우
+        if any(['2)' not in line for line in text_line_list if line.startswith('Current')]):  # 1+0 운용 경우 혹은 레벨이 정상 추출 되지 않는 경우
+            for index, line in enumerate(text_line_list):
+                if 'Slot' in line:  # Slot 번호 추출
+                    slot_info = re.search(r'[S][l][o][t][ ]([0-9-]{1,2})', line)
+                    slot_num = slot_info.group(1)
+                    need_value_by_slot.append(slot_num)
+                elif 'Current Output Power' in line:  # Tx 주/예비 무선 레벨 추출
+                    level_info = re.search(r'[P][o][w][e][r][ ]{1,}(.{1,})', line)
+                    main_level = level_info.group(1).replace('dBm', '').replace(',', '').replace('1)', '').strip()
+                    need_value_by_slot.append(main_level)
+                    need_value_by_slot.append('수집불가')
+                elif 'Current Input Power' in line:  # Rx 주/예비 무선 레벨 추출
+                    level_info = re.search(r'[P][o][w][e][r][ ]{1,}(.{1,})', line)
+                    main_level = level_info.group(1).replace('dBm', '').replace(',', '').replace('1)', '').strip()
+                    need_value_by_slot.append(main_level)
+                    need_value_by_slot.append('수집불가')
+        else:  # 정상의 경우(1+1 운용)
+            for index, line in enumerate(text_line_list):
+                if 'Slot' in line:  # Slot 번호 추출
+                    slot_info = re.search(r'[S][l][o][t][ ]([0-9-]{1,2})', line)
+                    slot_num = slot_info.group(1)
+                    need_value_by_slot.append(slot_num)
+                elif 'Current Output Power' in line:  # Tx 주/예비 무선 레벨 추출
+                    level_info = re.search(r'[1][)][ ](.{1,})[,]{0,1}[ ]{0,1}[2][)][ ](.{1,})', line)
+                    main_level = level_info.group(1).replace('dBm', '').replace(',', '').strip()
+                    backup_level = level_info.group(2).replace('dBm', '').replace(',', '').strip()
+                    need_value_by_slot.append(main_level)
+                    need_value_by_slot.append(backup_level)
+                elif 'Current Input Power' in line:  # Rx 주/예비 무선 레벨 추출
+                    level_info = re.search(r'[1][)][ ](.{1,})[,]{0,1}[ ]{0,1}[2][)][ ](.{1,})', line)
+                    main_level = level_info.group(1).replace('dBm', '').replace(',', '').strip()
+                    backup_level = level_info.group(2).replace('dBm', '').replace(',', '').strip()
+                    need_value_by_slot.append(main_level)
+                    need_value_by_slot.append(backup_level)
+        need_value_by_slot.append('-')  # QAM 값에 하이픈 추가
 
-    need_value_by_slot = [i.strip() for i in need_value_by_slot if type(i) is not int]
+    slot_num = need_value_by_slot[0]
+    qam_value = need_value_by_slot[-1]
+    main_tx_level = need_value_by_slot[1]
+    main_rx_level = need_value_by_slot[3]
+    backup_tx_level = need_value_by_slot[2]
+    backup_rx_level = need_value_by_slot[4]
 
-    if len(need_value_by_slot) == 6:  # 정상 : [slot, Tx(주), Tx(예비), Rx(주), Rx(예비), QAM]
-        main_slot = [need_value_by_slot[0], need_value_by_slot[1], need_value_by_slot[3], need_value_by_slot[-1]]
-        spare_slot = [str(int(need_value_by_slot[0])+1), need_value_by_slot[2], need_value_by_slot[4], need_value_by_slot[-1]]
-    elif len(need_value_by_slot) == 5:  # QAM 미지원 : [slot, Tx(주), Tx(예비), Rx(주), Rx(예비)]
-        main_slot = [need_value_by_slot[0], need_value_by_slot[1], need_value_by_slot[3], '-']
-        spare_slot = [str(int(need_value_by_slot[0])+1), need_value_by_slot[2], need_value_by_slot[4], '-']
-    elif len(need_value_by_slot) == 4:  # 1+0 운용 : [slot, Tx(주), Rx(주), QAM]
-        main_slot = [need_value_by_slot[0], need_value_by_slot[1], need_value_by_slot[3], need_value_by_slot[-1]]
-        spare_slot = [str(int(need_value_by_slot[0])+1), '-', '-', need_value_by_slot[-1]]
-    elif len(need_value_by_slot) == 3:  # 1+0 운용 + QAM 미지원 : [slot, Tx(주), Rx(주)]
-        main_slot = [need_value_by_slot[0], need_value_by_slot[1], need_value_by_slot[2], '-']
-        spare_slot = [str(int(need_value_by_slot[0])+1), '-', '-', '-']
+    if slot_num == '-':
+        error_info = ['-', '-', '-', '-', '-', '-', ]
+        return [error_info, error_info]
 
-    slot_info_list = [main_slot, spare_slot]
+    main_slot_info = [slot_num, main_tx_level, main_rx_level, qam_value]
+    backup_slot_info = [str(int(slot_num)+1), backup_tx_level, backup_rx_level, qam_value]
+
+    slot_info_list = [main_slot_info, backup_slot_info]
     return slot_info_list
 
 
@@ -171,10 +234,27 @@ def main():
             telnet.read_until(b'Password', 2)
             telnet.write(pw.encode('ascii') + b'\r\n')
             telnet.read_until(b'>', 2)
+
             for operating_slot in operating_slots:
+                get_slot_info_failcount = 0
                 slot_count_end += 2
-                telnet.write(b'show rl status ' + operating_slot.encode('ascii') + b' near-end' + b'\r\n')
-                display_txt = telnet.read_until(b'XPIC Status', 60).decode('ascii')
+
+                while get_slot_info_failcount < 10:
+                    # 각 MMU 슬롯별 Level, QAM 등 정보 가져올때 UnicodeDecodeError 발생시 반복 시도
+                    try:
+                        telnet.write(b'show rl status ' + operating_slot.encode('ascii') + b' near-end' + b'\r\n')
+                        display_txt = telnet.read_until(b'XPIC Status', 60).decode('ascii')
+                        break
+                    except:
+                        get_slot_info_failcount += 1
+                        time.sleep(3)
+                if get_slot_info_failcount == 10:  # 10번 시도 실패시 모든 값 하이픈으로 처리
+                    display_txt = '''
+                    Slot - NEAR END - MMU2 E 155, RAU2 X 11/15
+                    \r\n Current Output Power       1) - dBm, 2) -
+                    \r\n Current Input Power        1) - dBm, 2) -
+                    \r\n Tx Capacity - Modulation   154 Mbit/s - -QAM
+                    '''
                 slot_level_info_list = get_level_info(display_txt)
                 slot_info_df = make_result_df(slot_level_info_list, local_day, npu_temp, node_name, node_ip, node_type)
                 result_df = result_df.append(slot_info_df, ignore_index=True)  # 전체 결과 엑셀 파일 만들기 위해 대입
@@ -198,7 +278,7 @@ def main():
         print(for_print)
         print(result_df.loc[slot_count_start:slot_count_end])
         slot_count_start = slot_count_end
-        print('\t*진행률 : {0}/{1}'.format(complete_node_count, all_node_num))
+        print('\t*진행도 : {0}/{1}'.format(complete_node_count, all_node_num))
         for i in range(len(for_print) + 3):
             print('=', end='')
         print('\r\n')
